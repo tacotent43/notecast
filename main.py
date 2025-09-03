@@ -37,7 +37,7 @@ class AudioTranscription:
     
     language = "ru"
     
-    all_transcription: str = ""
+    all_transcription: list = []
     
     def __init__(
         self, 
@@ -118,8 +118,7 @@ class AudioTranscription:
         
         try:
             for chunk_idx in tqdm(range(len(self.chunks))):
-                # remake without strings (slow asf)
-                self.all_transcription += " " + self.process_chunk(self.chunks[chunk_idx])
+                self.all_transcription.append(self.process_chunk(self.chunks[chunk_idx]))
             
             end_time = time.time()
             logger.info(f"Transcription completed in {end_time - start_time:.2f} seconds")
@@ -132,7 +131,7 @@ class AudioTranscription:
         self.to_mono()
         self.split_to_chunks()
         self.process_all_chunks()
-        return self.all_transcription
+        return " ".join(self.all_transcription)
 
 try:
     track = AudioTranscription("sample.mp3")
