@@ -1,8 +1,13 @@
-# python -m venv .venv
+#!/bin/bash
+set -e
 
-# pip install -r requirements.txt --extra-index-url https://download.pytorch.org/whl/cu128
+ENV_NAME="notecast"
 
-conda init -c speech-to-conspect
+echo ">>> Creating environment $ENV_NAME from environment.yml"
+conda env create -f environment.yml || conda env update -f environment.yml --prune
 
-conda install pytorch torchvision torchaudio -c pytorch -c nvidia
-conda install accelerate transformers ffmpeg -c conda-forge 
+echo ">>> Activating environment"
+eval "$(conda shell.bash hook)"
+conda activate "$ENV_NAME"
+
+echo ">>> Download completed!"
