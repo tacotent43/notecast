@@ -11,3 +11,4 @@ wheels/
 
 main.todo
 sample.mp3
+*.spec

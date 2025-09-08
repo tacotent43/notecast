@@ -1,13 +1,14 @@
 from transformers import WhisperProcessor, WhisperForConditionalGeneration
 import torch
 import torchaudio
-from utils.logger import setup_logger
+from ui.ui_log_handler import UILogHandler
+from transcription.device_configuration import DeviceConfiguration
+import logging
 import time
 import math
 from tqdm import tqdm
 
-logger = setup_logger("AudioTranscribe module")
-
+# TODO: rename naming
 class AudioTranscription:
     model_name = "openai/whisper-large-v2" 
     
@@ -16,10 +17,16 @@ class AudioTranscription:
     sampling_rate: int
     
     chunks: list = []
+    batches: list = []
     chunk_size: int 
+    custom_chunk_length: int
+    custom_batch_length: int
+    
     device = "cuda"
     processor: WhisperProcessor
     model: WhisperForConditionalGeneration
+    logger: logging.Logger
+    torch_dtype: torch.dtype
     
     language = "ru"
     
@@ -28,23 +35,31 @@ class AudioTranscription:
     def __init__(
         self, 
         filepath: str,
-        language = "ru",
-        device = "cuda",
-        model_name = "openai/whisper-large-v2"
+        device_configuration: DeviceConfiguration,
+        logger: logging.Logger,
+        language = "ru"
     ) -> None:
+        # TODO: add pretty docs here
         self.filepath = filepath
         self.language = language
-        self.device = device
-        self.model_name = model_name
+        self.logger = logger
+
+        # extracting configuration
+        self.device = device_configuration.device
+        self.model_name = device_configuration.model_name
+        self.custom_chunk_length = device_configuration.chunk_length_s
+        self.custom_batch_length = device_configuration.batch_size
+        self.torch_dtype = device_configuration.torch_dtype
+        
         self.chunks: list = []
+        self.batches: list = []
         try:
             logger.info("Loading model WhisperProcessor...")
             self.processor = WhisperProcessor.from_pretrained(self.model_name)
             
             self.model = WhisperForConditionalGeneration.from_pretrained(
                 self.model_name,
-                torch_dtype=torch.float16,
-                device_map="auto"
+                torch_dtype=self.torch_dtype
             ).to(self.device)
             
             logger.info("Model loaded.")
@@ -65,58 +80,44 @@ class AudioTranscription:
         self.waveform = self.waveform.squeeze(0)
     
     def split_to_chunks(self, chunk_length_s: int = 30) -> None:
-        logger.info(f"Splitting audio on chunks...")
+        self.logger.info(f"Splitting audio on chunks...")
         
         self.chunk_size = chunk_length_s * 16000  # 16kHz after resampling
         total_samples = self.waveform.shape[0]
         chunks_count = (total_samples + self.chunk_size - 1) // self.chunk_size
         
-        logger.info(f"File length - {total_samples / 16000:.1f} seconds, splitting on {chunks_count} chunks by {chunk_length_s} seconds per chunk.")
+        self.logger.info(f"File length - {total_samples / 16000:.1f} seconds, splitting on {chunks_count} chunks by {chunk_length_s} seconds per chunk.")
 
         self.chunks = []
-        for idx in range(chunks_count):
+        for idx in tqdm(range(chunks_count)):
             start = idx * self.chunk_size
             end = min((idx + 1) * self.chunk_size, total_samples)
             chunk = self.waveform[start:end].cpu().numpy().astype("float32")
             self.chunks.append(chunk)
     
-    def process_chunk(
-        self, 
-        chunk
-    ) -> str:
-        inputs = self.processor(chunk, sampling_rate=16000, return_tensors="pt")
-        input_features = inputs.input_features.to(self.device).to(torch.float16)
-
-        with torch.no_grad():
-            predicted_ids = self.model.generate(
-                input_features,
-                language=self.language,
-                task="transcribe",
-                temperature=0.0
-            )
+    def resplit_to_batches(self) -> None:
+        self.logger.info(f"Splitting chunks into batches...")
+        self.batches = []
+        for i in range(0, len(self.chunks), self.custom_batch_length):
+            batch = self.chunks[i:i + self.custom_batch_length]
+            self.batches.append(batch)
         
-        text = self.processor.batch_decode(predicted_ids, skip_special_tokens=True)[0]
-        
-        return text
     
-    def process_all_chunks(self, batch_size: int = 16) -> None:
+    def process_all_batches(self) -> None:
         start_time = time.time()
         try:
             self.all_transcription = []
-
-            for i in tqdm(range(math.ceil(len(self.chunks) / batch_size))):
-                # TODO: rewrite batching as a separate function
-                batch = self.chunks[i*batch_size:(i+1)*batch_size]
-
+            
+            for idx in tqdm(range(len(self.batches))):
                 inputs = self.processor(
-                    batch, 
-                    sampling_rate=16000, 
+                    self.batches[idx], 
+                    sampling_rate=16000,
                     return_tensors="pt", 
                     padding=True
                 )
-
-                input_features = inputs.input_features.to(self.device).to(torch.float16)
-
+                
+                input_features = inputs.input_features.to(self.device).to(self.torch_dtype)
+                
                 with torch.no_grad():
                     predicted_ids = self.model.generate(
                         input_features,
@@ -124,20 +125,20 @@ class AudioTranscription:
                         task="transcribe",
                         temperature=0.0
                     )
-
+                
                 texts = self.processor.batch_decode(predicted_ids, skip_special_tokens=True)
                 self.all_transcription.extend(texts)
-
             end_time = time.time()
-            logger.info(f"Transcription completed in {end_time - start_time:.2f} seconds")
+            self.logger.info(f"Transcription completed in {end_time - start_time:.2f} seconds")
 
         except Exception as e:
-            logger.error(f"Errors occured while processing chunks: {e}")
+            self.logger.error(f"Errors occured while processing chunks: {e}")
 
     
     def transcribe_audio(self) -> str:
         self.resample()
         self.to_mono()
         self.split_to_chunks()
-        self.process_all_chunks()
+        self.resplit_to_batches()
+        self.process_all_batches()
         return " ".join(self.all_transcription)
