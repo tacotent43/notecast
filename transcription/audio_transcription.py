@@ -8,7 +8,7 @@ import time
 import math
 from tqdm import tqdm
 
-# TODO: rename naming
+# TODO: implement transcription with shift
 class AudioTranscription:
     model_name = "openai/whisper-large-v2" 
     
@@ -53,6 +53,7 @@ class AudioTranscription:
         
         self.chunks: list = []
         self.batches: list = []
+        self.all_transcription: list = []
         try:
             logger.info("Loading model WhisperProcessor...")
             self.processor = WhisperProcessor.from_pretrained(self.model_name)
@@ -71,15 +72,15 @@ class AudioTranscription:
             logger.error(f"Unable to load file {self.filepath}: {e}")
             raise
     
-    def resample(self) -> None:
+    def _resample(self) -> None:
         self.waveform = torchaudio.functional.resample(self.waveform, self.sampling_rate, 16000)
     
-    def to_mono(self):
+    def _to_mono(self):
         if self.waveform.shape[0] > 1:
             self.waveform = self.waveform.mean(dim=0, keepdim=True)
         self.waveform = self.waveform.squeeze(0)
     
-    def split_to_chunks(self, chunk_length_s: int = 30) -> None:
+    def _split_to_chunks(self, chunk_length_s: int = 30) -> None:
         self.logger.info(f"Splitting audio on chunks...")
         
         self.chunk_size = chunk_length_s * 16000  # 16kHz after resampling
@@ -95,15 +96,14 @@ class AudioTranscription:
             chunk = self.waveform[start:end].cpu().numpy().astype("float32")
             self.chunks.append(chunk)
     
-    def resplit_to_batches(self) -> None:
+    def _resplit_to_batches(self) -> None:
         self.logger.info(f"Splitting chunks into batches...")
         self.batches = []
         for i in range(0, len(self.chunks), self.custom_batch_length):
             batch = self.chunks[i:i + self.custom_batch_length]
             self.batches.append(batch)
-        
     
-    def process_all_batches(self) -> None:
+    def _process_all_batches(self) -> None:
         start_time = time.time()
         try:
             self.all_transcription = []
@@ -136,9 +136,10 @@ class AudioTranscription:
 
     
     def transcribe_audio(self) -> str:
-        self.resample()
-        self.to_mono()
-        self.split_to_chunks()
-        self.resplit_to_batches()
-        self.process_all_batches()
+        # TODO: maybe something else, not str?
+        self._resample()
+        self._to_mono()
+        self._split_to_chunks()
+        self._resplit_to_batches()
+        self._process_all_batches()
         return " ".join(self.all_transcription)

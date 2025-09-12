@@ -1,123 +1,245 @@
+import os
+import threading
+import queue
 import tkinter as tk
-from tkinter.scrolledtext import ScrolledText
-from ui.ui_log_handler import UILogHandler, setup_ui_logger
+from tkinter import scrolledtext, filedialog, messagebox
+
+import customtkinter as ctk
+import torch
+
+from ui.ui_log_handler import setup_ui_logger
 from transcription.torch_checker import check_torch
 from transcription.device_configuration import DeviceConfiguration
 from transcription.audio_transcription import AudioTranscription
 
-def main():
-    root = tk.Tk()
-    root.title("Audio Transcriptor")
-    root.geometry("800x600")
 
-    for col in range(4):
-        root.grid_columnconfigure(col, weight=1)
-    root.grid_rowconfigure(6, weight=1)
+WINDOW_WIDTH = 900
+WINDOW_HEIGHT = 650
 
-    ### Buttons selector
-    check_torch_baton = tk.Button(root, text="Check Torch")
-    check_torch_baton.grid(row=0, column=0, padx=5, pady=5, sticky="ew")
 
-    # TODO: implement saving function
-    save_configuration_baton = tk.Button(root, text="Save configuration")
-    save_configuration_baton.grid(row=0, column=1, padx=5, pady=5, sticky="ew")
+class TranscriberApp(ctk.CTk):
+    def __init__(self):
+        super().__init__()
+        self.title("Notecast")
+        self.geometry(f"{WINDOW_WIDTH}x{WINDOW_HEIGHT}")
+        ctk.set_appearance_mode("System")
+        ctk.set_default_color_theme("blue")
 
-    # TODO: implement deleting function
-    delete_configuration_baton = tk.Button(root, text="Delete configuration")
-    delete_configuration_baton.grid(row=0, column=2, padx=5, pady=5, sticky="ew")
+        # states
+        self.progress_queue = queue.Queue()
+        self.transcribe_thread = None
+        self.stop_flag = threading.Event()
 
-    start_transcription_baton = tk.Button(root, text="Transcript")
-    start_transcription_baton.grid(row=0, column=3, padx=5, pady=5, sticky="ew")
+        # user variables
+        self.model_var = tk.StringVar(value="openai/whisper-large-v2")
+        self.batch_var = tk.StringVar(value="32")
+        self.dtype_var = tk.StringVar(value="torch.float16")
+        self.chunk_var = tk.StringVar(value="30")
 
-    ### Model options selector
-    model_options = [
-        "openai/whisper-large-v2",
-        "openai/whisper-large",
-        "openai/whisper-medium",
-        "openai/whisper-small",
-        "openai/whisper-tiny"
-    ]
-    selected_model = tk.StringVar(value=model_options[0])
-    label_model = tk.Label(root, text="Model name:")
-    label_model.grid(row=1, column=0, sticky="w", pady=5, padx=5)
-    dropdown_model_selection = tk.OptionMenu(root, selected_model, *model_options)
-    dropdown_model_selection.grid(row=1, column=1, sticky="ew", pady=5, padx=5)
+        # settings device options
+        device_opts = []
+        if torch.cuda.is_available():
+            device_opts.append("cuda")
+        if torch.backends.mps.is_available():
+            device_opts.append("mps")
+        device_opts.append("cpu")
+        self.device_var = tk.StringVar(value=device_opts[0])
+        self.device_opts = device_opts
 
-    ### Batch size selector
-    batch_sizes = ["32", "16", "8", "4", "2"]
-    selected_batch_size = tk.StringVar(value=batch_sizes[0])
-    label_batch_size = tk.Label(root, text="Batch size:")
-    label_batch_size.grid(row=1, column=2, sticky="w", pady=5, padx=5)
-    dropdown_batch_size_selection = tk.OptionMenu(root, selected_batch_size, *batch_sizes)
-    dropdown_batch_size_selection.grid(row=1, column=3, sticky="ew", pady=5, padx=5)
+        self.input_file_var = tk.StringVar()
+        self.output_file_var = tk.StringVar()
 
-    ### Data type selector
-    data_types = ["torch.float16", "torch.float32", "torch.bfloat16"]
-    selected_data_type = tk.StringVar(value=data_types[0])
-    label_data_type = tk.Label(root, text="Data type:")
-    label_data_type.grid(row=2, column=0, sticky="w", pady=5, padx=5)
-    dropdown_data_type_selection = tk.OptionMenu(root, selected_data_type, *data_types)
-    dropdown_data_type_selection.grid(row=2, column=1, sticky="ew", pady=5, padx=5)
+        # tabs packing
+        self.tabview = ctk.CTkTabview(self)
+        self.tabview.pack(expand=True, fill="both", padx=10, pady=10)
 
-    ### Chunk length selector
-    chunk_lengths = ["30", "25", "20", "15", "10", "5"]
-    selected_chunk_length = tk.StringVar(value=chunk_lengths[0])
-    label_chunk_length = tk.Label(root, text="Chunk length:")
-    label_chunk_length.grid(row=2, column=2, sticky="w", pady=5, padx=5)
-    dropdown_chunk_length_selection = tk.OptionMenu(root, selected_chunk_length, *chunk_lengths)
-    dropdown_chunk_length_selection.grid(row=2, column=3, sticky="ew", pady=5, padx=5)
-    
-    # TODO: add device selector (cuda/mps/cpu)
+        self.transcript_tab = self.tabview.add("Transcription")
+        self.settings_tab = self.tabview.add("Settings")
 
-    ### Filepath (input)
-    # TODO: add checker if path is valid/invalid (i think in utils or something)
-    label_file_path = tk.Label(root, text="Input filepath:")
-    label_file_path.grid(row=3, column=0, sticky="w", pady=5, padx=5)
-    file_path = tk.Text(root, height=1)
-    file_path.grid(row=3, column=1, columnspan=3, sticky="ew", pady=5, padx=5)
+        self._build_transcription_tab()
+        self._build_settings_tab()
 
-    ### Filepath (output)
-    # TODO: add question mark here with tip while mouse is on it
-    label_output_file_path = tk.Label(root, text="Output filepath:")
-    label_output_file_path.grid(row=4, column=0, sticky="w", pady=5, padx=5)
-    output_file_path = tk.Text(root, height=1)
-    output_file_path.grid(row=4, column=1, columnspan=3, sticky="ew", pady=5, padx=5)
+        # logger
+        self.ui_logger = setup_ui_logger(self.log_box)
 
-    def show_selections():
-        ui_logger.info(f"Selected model: {selected_model.get()}")
-        ui_logger.info(f"Selected batch size: {selected_batch_size.get()} chunks")
-        ui_logger.info(f"Selected data type: {selected_data_type.get()}")
-    
-    show_selections_baton = tk.Button(root, text="Show Selections", command=show_selections)
-    show_selections_baton.grid(row=5, column=0, columnspan=4, pady=5, sticky="ew")
+    # main transcription tab
+    def _build_transcription_tab(self):
+        # file selectors
+        file_frame = ctk.CTkFrame(self.transcript_tab, corner_radius=10)
+        file_frame.pack(padx=20, pady=10, fill="x")
 
-    log_box = ScrolledText(root, wrap="word")
-    log_box.grid(row=6, column=0, columnspan=4, sticky="nsew", padx=10, pady=5)
-    ui_logger = setup_ui_logger(log_box)
-    
-    def transcribe():
-        current_device_config = DeviceConfiguration(
-            device="cuda",
-            model_name=selected_model.get(),
-            batch_size=int(selected_batch_size.get()),
-            chunk_length_s=30,
-            data_type=selected_data_type.get()
+        ctk.CTkLabel(file_frame, text="Input file:").pack(side="left", padx=5, pady=5)
+        ctk.CTkEntry(file_frame, textvariable=self.input_file_var, width=400).pack(
+            side="left", padx=5, pady=5, expand=True, fill="x"
         )
-        Audio = AudioTranscription(
-            filepath=file_path.get("1.0", "end-1c"),
-            device_configuration=current_device_config,
-            logger=ui_logger
+        ctk.CTkButton(file_frame, text="Browse", command=self._browse_input).pack(
+            side="left", padx=5, pady=5
         )
-        transcription = Audio.transcribe_audio()
-        with open(f"{file_path.get('1.0', 'end-1c')}.txt", "w") as output_file:
-            output_file.write(transcription)
-    
-    check_torch_baton.config(command=lambda: check_torch(ui_logger))
-    start_transcription_baton.config(command=transcribe)
-    
-    root.mainloop()
 
+        out_frame = ctk.CTkFrame(self.transcript_tab, corner_radius=10)
+        out_frame.pack(padx=20, pady=5, fill="x")
+        ctk.CTkLabel(out_frame, text="Output file:").pack(side="left", padx=5, pady=5)
+        ctk.CTkEntry(out_frame, textvariable=self.output_file_var, width=400).pack(
+            side="left", padx=5, pady=5, expand=True, fill="x"
+        )
+        ctk.CTkButton(out_frame, text="Browse", command=self._browse_output).pack(
+            side="left", padx=5, pady=5
+        )
 
+        # controls
+        ctrl_frame = ctk.CTkFrame(self.transcript_tab, corner_radius=10)
+        ctrl_frame.pack(padx=20, pady=10, fill="x")
 
-if __name__ == "__main__":
-    main()
+        ctk.CTkButton(ctrl_frame, text="Check Torch", command=self._check_torch).pack(
+            side="left", padx=10, pady=5
+        )
+        self.start_btn = ctk.CTkButton(
+            ctrl_frame, text="Start transcription", command=self._start_transcription
+        )
+        self.start_btn.pack(side="left", padx=10, pady=5)
+
+        self.stop_btn = ctk.CTkButton(
+            ctrl_frame, text="Stop", command=self._stop_transcription, state="disabled"
+        )
+        self.stop_btn.pack(side="left", padx=10, pady=5)
+
+        # log box
+        self.log_box = scrolledtext.ScrolledText(
+            self.transcript_tab,
+            wrap="word",
+            height=20,
+            font=("Consolas", 16),
+        )
+        self.log_box.pack(padx=20, pady=10, expand=True, fill="both")
+
+    def _build_settings_tab(self):
+        pad = 20
+
+        ### Model
+        ctk.CTkLabel(self.settings_tab, text="Model:").pack(
+            anchor="w", padx=pad, pady=(pad, 5)
+        )
+        ctk.CTkOptionMenu(
+            self.settings_tab,
+            variable=self.model_var,
+            values=[
+                "openai/whisper-large-v2",
+                "openai/whisper-large",
+                "openai/whisper-medium",
+                "openai/whisper-small",
+                "openai/whisper-tiny",
+            ],
+        ).pack(fill="x", padx=pad, pady=5)
+
+        ### Batch size
+        ctk.CTkLabel(self.settings_tab, text="Batch size:").pack(
+            anchor="w", padx=pad, pady=(pad, 5)
+        )
+        ctk.CTkOptionMenu(
+            self.settings_tab,
+            variable=self.batch_var,
+            values=["32", "16", "8", "4", "2"],
+        ).pack(fill="x", padx=pad, pady=5)
+
+        ### Data type
+        ctk.CTkLabel(self.settings_tab, text="Data type:").pack(
+            anchor="w", padx=pad, pady=(pad, 5)
+        )
+        ctk.CTkOptionMenu(
+            self.settings_tab,
+            variable=self.dtype_var,
+            values=["torch.float16", "torch.float32", "torch.bfloat16"],
+        ).pack(fill="x", padx=pad, pady=5)
+
+        ### Chunk length
+        ctk.CTkLabel(self.settings_tab, text="Chunk length (s):").pack(
+            anchor="w", padx=pad, pady=(pad, 5)
+        )
+        ctk.CTkOptionMenu(
+            self.settings_tab,
+            variable=self.chunk_var,
+            values=["30", "25", "20", "15", "10", "5"],
+        ).pack(fill="x", padx=pad, pady=5)
+
+        ### Device
+        ctk.CTkLabel(self.settings_tab, text="Device:").pack(
+            anchor="w", padx=pad, pady=(pad, 5)
+        )
+        ctk.CTkOptionMenu(
+            self.settings_tab,
+            variable=self.device_var,
+            values=self.device_opts,
+        ).pack(fill="x", padx=pad, pady=5)
+
+    # action buttons
+    def _browse_input(self):
+        path = filedialog.askopenfilename(
+            title="Select input audio file",
+            filetypes=[("Audio files", "*.wav *.mp3 *.m4a *.flac"), ("All files", "*.*")]
+        )
+        if path:
+            self.input_file_var.set(path)
+
+    def _browse_output(self):
+        path = filedialog.asksaveasfilename(
+            title="Select output file",
+            defaultextension=".txt",
+            filetypes=[("Text files", "*.txt"), ("All files", "*.*")]
+        )
+        if path:
+            self.output_file_var.set(path)
+
+    def _check_torch(self):
+        check_torch(self.ui_logger)
+
+    def _start_transcription(self):
+        infile = self.input_file_var.get().strip()
+        if not infile or not os.path.isfile(infile):
+            messagebox.showerror("Error", "Please select a valid input file.")
+            return
+
+        self.start_btn.configure(state="disabled")
+        self.stop_btn.configure(state="normal")
+        self.ui_logger.info("Starting transcription...")
+
+        self.stop_flag.clear()
+        self.transcribe_thread = threading.Thread(
+            target=self._transcribe_worker, args=(infile,), daemon=True
+        )
+        self.transcribe_thread.start()
+
+    def _stop_transcription(self):
+        self.stop_flag.set()
+        self.ui_logger.info("Stopping transcription...")
+        self.stop_btn.configure(state="disabled")
+
+    def _transcribe_worker(self, infile: str):
+        try:
+            config = DeviceConfiguration(
+                device=self.device_var.get(),
+                model_name=self.model_var.get(),
+                batch_size=int(self.batch_var.get()),
+                chunk_length_s=int(self.chunk_var.get()),
+                data_type=self.dtype_var.get(),
+            )
+            Audio = AudioTranscription(
+                filepath=infile,
+                device_configuration=config,
+                logger=self.ui_logger,
+            )
+            transcription = Audio.transcribe_audio()
+
+            outfile = self.output_file_var.get().strip()
+            if not outfile:
+                outfile = infile + ".txt"
+
+            with open(outfile, "w", encoding="utf-8") as f:
+                f.write(transcription)
+
+            self.ui_logger.info(f"Transcription saved to {outfile}")
+        except Exception as e:
+            self.ui_logger.error(f"Error: {e}")
+            messagebox.showerror("Error", str(e))
+        finally:
+            self.start_btn.configure(state="normal")
+            self.stop_btn.configure(state="disabled")
