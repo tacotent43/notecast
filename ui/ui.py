@@ -1,17 +1,16 @@
 import os
-import threading
 import queue
+import threading
 import tkinter as tk
-from tkinter import scrolledtext, filedialog, messagebox
+from tkinter import filedialog, messagebox, scrolledtext
 
 import customtkinter as ctk
 import torch
 
-from ui.ui_log_handler import setup_ui_logger
-from transcription.torch_checker import check_torch
-from transcription.device_configuration import DeviceConfiguration
 from transcription.audio_transcription import AudioTranscription
-
+from transcription.device_configuration import DeviceConfiguration
+from transcription.torch_checker import check_torch
+from ui.ui_log_handler import setup_ui_logger
 
 WINDOW_WIDTH = 900
 WINDOW_HEIGHT = 650
@@ -175,7 +174,10 @@ class TranscriberApp(ctk.CTk):
     def _browse_input(self):
         path = filedialog.askopenfilename(
             title="Select input audio file",
-            filetypes=[("Audio files", "*.wav *.mp3 *.m4a *.flac"), ("All files", "*.*")]
+            filetypes=[
+                ("Audio files", "*.wav *.mp3 *.m4a *.flac"),
+                ("All files", "*.*"),
+            ],
         )
         if path:
             self.input_file_var.set(path)
@@ -184,7 +186,7 @@ class TranscriberApp(ctk.CTk):
         path = filedialog.asksaveasfilename(
             title="Select output file",
             defaultextension=".txt",
-            filetypes=[("Text files", "*.txt"), ("All files", "*.*")]
+            filetypes=[("Text files", "*.txt"), ("All files", "*.*")],
         )
         if path:
             self.output_file_var.set(path)

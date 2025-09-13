@@ -1,5 +1,6 @@
-import tkinter as tk
 import logging
+import tkinter as tk
+
 
 class UILogHandler(logging.Handler):
     def __init__(self, text_widget: tk.Text):
@@ -10,6 +11,7 @@ class UILogHandler(logging.Handler):
         log_entry = self.format(record)
         self.text_widget.insert(tk.END, log_entry + "\n")
         self.text_widget.see(tk.END)
+
 
 # TODO: maybe some tqdm here, not in console?
 def setup_ui_logger(text_widget: tk.Text, level=logging.INFO):
