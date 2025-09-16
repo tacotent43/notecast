@@ -3,19 +3,12 @@ channels:
   - pytorch
   - nvidia
   - conda-forge
-  - defaults
+  - bioconda
 dependencies:
-  - python=3.10
-  - pytorch::pytorch=2.0.1
-  - pytorch::torchvision=0.15.2
-  - pytorch::torchaudio=2.0.2
-  - pytorch::cudatoolkit=11.8
-  - transformers=4.30.0
-  - accelerate=0.20.0
+  - pytorch
+  - torchvision
+  - torchaudio
+  - transformers
+  - python=3.12
   - ffmpeg
-  - pyinstaller
   - customtkinter
-  - isort
-  - mypy
-  - black
-  - tqdm

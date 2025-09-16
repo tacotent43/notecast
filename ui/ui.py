@@ -11,6 +11,7 @@ from transcription.audio_transcription import AudioTranscription
 from transcription.device_configuration import DeviceConfiguration
 from transcription.torch_checker import check_torch
 from ui.ui_log_handler import setup_ui_logger
+from ui.tooltip import ToolTip
 
 WINDOW_WIDTH = 900
 WINDOW_HEIGHT = 650
@@ -101,6 +102,8 @@ class TranscriberApp(ctk.CTk):
             ctrl_frame, text="Stop", command=self._stop_transcription, state="disabled"
         )
         self.stop_btn.pack(side="left", padx=10, pady=5)
+        
+        # TODO: add unload model button here
 
         # log box
         self.log_box = scrolledtext.ScrolledText(
@@ -112,6 +115,7 @@ class TranscriberApp(ctk.CTk):
         self.log_box.pack(padx=20, pady=10, expand=True, fill="both")
 
     def _build_settings_tab(self):
+        # TODO: add tooltips here
         pad = 20
 
         ### Model
@@ -175,20 +179,27 @@ class TranscriberApp(ctk.CTk):
         path = filedialog.askopenfilename(
             title="Select input audio file",
             filetypes=[
-                ("Audio files", "*.wav *.mp3 *.m4a *.flac"),
+                ("Media files", "*.wav *.mp3 *.m4a *.flac *.ogg *.mp4 *.mkv *.avi"),
+                ("Audio files", "*.wav *.mp3 *.m4a *.flac *.ogg"),
+                ("Video files", "*.mp4 *.mkv *.avi"),
                 ("All files", "*.*"),
-            ],
+            ]
         )
         if path:
             self.input_file_var.set(path)
 
     def _browse_output(self):
-        path = filedialog.asksaveasfilename(
-            title="Select output file",
-            defaultextension=".txt",
-            filetypes=[("Text files", "*.txt"), ("All files", "*.*")],
+        # TODO: add custom filename here
+        directory = filedialog.askdirectory(
+            title="Select output directory",
         )
-        if path:
+        if directory:
+            input_name = os.path.basename(self.input_file_var.get())
+            name, _ = os.path.splitext(input_name)
+            # TODO: redo output_name logic maybe?
+            output_name = f"{"".join(name.split(".").pop())}.txt"
+            path = os.path.join(directory, output_name)
+
             self.output_file_var.set(path)
 
     def _check_torch(self):

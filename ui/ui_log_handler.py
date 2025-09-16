@@ -13,7 +13,7 @@ class UILogHandler(logging.Handler):
         self.text_widget.see(tk.END)
 
 
-# TODO: maybe some tqdm here, not in console?
+# TODO: status should be here
 def setup_ui_logger(text_widget: tk.Text, level=logging.INFO):
     logger = logging.getLogger("UI_LOGGER")
     logger.setLevel(level)

@@ -18,6 +18,7 @@ class AudioTranscription:
     filepath: str
     waveform: torch.Tensor
     sampling_rate: int
+    file_format: str
 
     chunks: list = []
     batches: list = []
@@ -46,6 +47,9 @@ class AudioTranscription:
         self.filepath = filepath
         self.language = language
         self.logger = logger
+        
+        # setting file extension
+        self.file_format = filepath.split(".")[-1]
 
         # extracting configuration
         self.device = device_configuration.device
@@ -57,24 +61,28 @@ class AudioTranscription:
         self.chunks: list = []
         self.batches: list = []
         self.all_transcription: list = []
-        try:
-            logger.info("Loading model WhisperProcessor...")
+    
+    def _load_model(self) -> None:
+        self.logger.info("Loading model WhisperProcessor...")
+        try: 
             self.processor = WhisperProcessor.from_pretrained(self.model_name)
-
             self.model = WhisperForConditionalGeneration.from_pretrained(
-                self.model_name, torch_dtype=self.torch_dtype
+                self.model_name, torch_dtype = self.torch_dtype
             ).to(self.device)
-
-            logger.info("Model loaded.")
-
-            self.waveform, self.sampling_rate = torchaudio.load(
-                filepath, format="mp3", backend="ffmpeg"
-            )
-            logger.info(f"Successfully loaded file {filepath}.")
-
+            
+            self.logger.info("Model loaded.")
         except Exception as e:
-            logger.error(f"Unable to load file {self.filepath}: {e}")
-            raise
+            self.logger.error(f"Error while loading model: {e}")
+    
+    def _load_file(self) -> None:
+        self.logger.info(f"Loading file {self.filepath}")
+        try:
+            self.waveform, self.sampling_rate = torchaudio.load(
+                self.filepath, format=self.file_format, backend="ffmpeg"
+            )
+            self.logger.info(f"Successfully loaded file {self.filepath}.")
+        except Exception as e: 
+            self.logger.error(f"Unable to load file {self.filepath}: {e}")
 
     def _resample(self) -> None:
         self.waveform = torchaudio.functional.resample(
@@ -86,15 +94,15 @@ class AudioTranscription:
             self.waveform = self.waveform.mean(dim=0, keepdim=True)
         self.waveform = self.waveform.squeeze(0)
 
-    def _split_to_chunks(self, chunk_length_s: int = 30) -> None:
+    def _split_to_chunks(self, shift: bool = False) -> None:
         self.logger.info(f"Splitting audio on chunks...")
 
-        self.chunk_size = chunk_length_s * 16000  # 16kHz after resampling
+        self.chunk_size = self.custom_chunk_length * 16000  # 16kHz after resampling
         total_samples = self.waveform.shape[0]
         chunks_count = (total_samples + self.chunk_size - 1) // self.chunk_size
 
         self.logger.info(
-            f"File length - {total_samples / 16000:.1f} seconds, splitting on {chunks_count} chunks by {chunk_length_s} seconds per chunk."
+            f"File length - {total_samples / 16000:.1f} seconds, splitting on {chunks_count} chunks by {self.custom_chunk_length} seconds per chunk."
         )
 
         self.chunks = []
@@ -104,12 +112,13 @@ class AudioTranscription:
             chunk = self.waveform[start:end].cpu().numpy().astype("float32")
             self.chunks.append(chunk)
 
-    def _resplit_to_batches(self) -> None:
+    def _resplit_chunks_to_batches(self) -> None:
         self.logger.info(f"Splitting chunks into batches...")
         self.batches = []
         for i in range(0, len(self.chunks), self.custom_batch_length):
             batch = self.chunks[i : i + self.custom_batch_length]
             self.batches.append(batch)
+        self.logger.info(f"Total: {len(self.batches)} batches")
 
     def _process_all_batches(self) -> None:
         start_time = time.time()
@@ -149,10 +158,11 @@ class AudioTranscription:
             self.logger.error(f"Errors occured while processing chunks: {e}")
 
     def transcribe_audio(self) -> str:
-        # TODO: maybe something else, not str?
+        self._load_model()
+        self._load_file()
         self._resample()
         self._to_mono()
         self._split_to_chunks()
-        self._resplit_to_batches()
+        self._resplit_chunks_to_batches()
         self._process_all_batches()
         return " ".join(self.all_transcription)
