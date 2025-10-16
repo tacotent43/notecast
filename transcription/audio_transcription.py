@@ -1,6 +1,8 @@
 import logging
 import math
 import time
+import sys
+import gc
 
 import torch
 import torchaudio
@@ -27,8 +29,8 @@ class AudioTranscription:
     custom_batch_length: int
 
     device = "cuda"
-    processor: WhisperProcessor
-    model: WhisperForConditionalGeneration
+    processor: WhisperProcessor | None
+    model: WhisperForConditionalGeneration | None
     logger: logging.Logger
     torch_dtype: torch.dtype
 
@@ -41,13 +43,13 @@ class AudioTranscription:
         filepath: str,
         device_configuration: DeviceConfiguration,
         logger: logging.Logger,
-        language="ru",
+        language: str = "ru",
     ) -> None:
         # TODO: add pretty docs here
         self.filepath = filepath
         self.language = language
         self.logger = logger
-        
+
         # setting file extension
         self.file_format = filepath.split(".")[-1]
 
@@ -61,19 +63,33 @@ class AudioTranscription:
         self.chunks: list = []
         self.batches: list = []
         self.all_transcription: list = []
-    
+
     def _load_model(self) -> None:
         self.logger.info("Loading model WhisperProcessor...")
-        try: 
+        try:
+            start_time = time.time()
+
             self.processor = WhisperProcessor.from_pretrained(self.model_name)
             self.model = WhisperForConditionalGeneration.from_pretrained(
-                self.model_name, torch_dtype = self.torch_dtype
+                self.model_name, torch_dtype=self.torch_dtype
             ).to(self.device)
-            
-            self.logger.info("Model loaded.")
+
+            end_time = time.time()
+            self.logger.info(
+                f"Model loaded successfully in {end_time - start_time:.2f} seconds."
+            )
         except Exception as e:
             self.logger.error(f"Error while loading model: {e}")
-    
+
+    def _unload_model(self) -> None:
+        self.logger.info("Unloading model...")
+        self.model = None
+        self.processor = None
+        if self.device == "cuda":
+            torch.cuda.empty_cache()
+        # TODO: maybe do something here for MPS
+        self.logger.info("Model unloaded successfully.")
+
     def _load_file(self) -> None:
         self.logger.info(f"Loading file {self.filepath}")
         try:
@@ -81,7 +97,7 @@ class AudioTranscription:
                 self.filepath, format=self.file_format, backend="ffmpeg"
             )
             self.logger.info(f"Successfully loaded file {self.filepath}.")
-        except Exception as e: 
+        except Exception as e:
             self.logger.error(f"Unable to load file {self.filepath}: {e}")
 
     def _resample(self) -> None:
@@ -118,11 +134,14 @@ class AudioTranscription:
         for i in range(0, len(self.chunks), self.custom_batch_length):
             batch = self.chunks[i : i + self.custom_batch_length]
             self.batches.append(batch)
-        self.logger.info(f"Total: {len(self.batches)} batches")
+        self.logger.info(f"Total: {len(self.batches)} batches, weight = {sys.getsizeof(self.batches)}")
 
     def _process_all_batches(self) -> None:
         start_time = time.time()
         try:
+            assert self.processor is not None
+            assert self.model is not None
+
             self.all_transcription = []
 
             for idx in tqdm(range(len(self.batches))):
@@ -149,6 +168,15 @@ class AudioTranscription:
                     predicted_ids, skip_special_tokens=True
                 )
                 self.all_transcription.extend(texts)
+                
+                inputs = None
+                input_features = None
+                predicted_ids = None
+                gc.collect()
+                if self.device.startswith("cuda"):
+                    torch.cuda.empty_cache()
+                    torch.cuda.ipc_collect()
+
             end_time = time.time()
             self.logger.info(
                 f"Transcription completed in {end_time - start_time:.2f} seconds"
@@ -165,4 +193,5 @@ class AudioTranscription:
         self._split_to_chunks()
         self._resplit_chunks_to_batches()
         self._process_all_batches()
+        self._unload_model()
         return " ".join(self.all_transcription)

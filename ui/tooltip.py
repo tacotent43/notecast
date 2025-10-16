@@ -1,5 +1,6 @@
 import customtkinter as ctk
 
+
 class ToolTip(ctk.CTkToplevel):
     def __init__(self, widget, text):
         super().__init__()
@@ -7,7 +8,9 @@ class ToolTip(ctk.CTkToplevel):
         self.overrideredirect(True)
         self.attributes("-topmost", True)
 
-        self.label = ctk.CTkLabel(self, text=text, fg_color="gray20", corner_radius=6, padx=10, pady=5)
+        self.label = ctk.CTkLabel(
+            self, text=text, fg_color="gray20", corner_radius=6, padx=10, pady=5
+        )
         self.label.pack()
 
         self.widget = widget

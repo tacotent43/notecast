@@ -12,3 +12,6 @@ wheels/
 main.todo
 sample.mp3
 *.spec
+
+# лютый завоз
+ui/assets/question_mark.png

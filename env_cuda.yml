@@ -6,9 +6,10 @@ channels:
   - bioconda
 dependencies:
   - pytorch
+  - ffmpeg
   - torchvision
   - torchaudio
   - transformers
   - python=3.12
-  - ffmpeg
   - customtkinter
+  - openai
