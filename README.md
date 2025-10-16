@@ -2,7 +2,7 @@
 
 **Notecast** is a simple and minimalistic utilite to transcribe audiofiles to text and create a conspect.
 
-Requires nvcc v12.8
+Requires nvidia cuda toolkit v12.4
 
 You can create environment running
 ```
