@@ -31,37 +31,8 @@ class TranscriberApp(ctk.CTk):
 
         # TODO: fix this stuff        
         base_path = getattr(sys, "_MEIPASS", os.path.dirname(os.path.abspath(__file__)))
-        icon_path = os.path.join(base_path, "assets", "logo.png")
-
-        applied_method = None
-
-        try:
-            self.iconbitmap(icon_path)
-            applied_method = "iconbitmap"
-        except Exception as e:
-            print("iconbitmap did not work:", e)
-
-        if applied_method is None:
-            try:
-                img = tk.PhotoImage(file=icon_path)
-                self.iconphoto(False, img)
-                applied_method = "iconphoto"
-            except Exception as e:
-                print("iconphoto did not work:", e)
-
-        if applied_method is None:
-            try:
-                pil = Image.open(icon_path)
-                photo = ImageTk.PhotoImage(pil)
-                self.tk.call('wm', 'iconphoto', self._w, photo)
-                applied_method = "tk.call"
-            except Exception as e:
-                print("wm iconphoto via tk.call did not work:", e)
-
-        if applied_method:
-            print(f"Applied method: {applied_method}")
-        else:
-            print("Can't set an icon.")
+        icon_path = os.path.join(base_path, "assets", "logo.ico")
+        self.iconbitmap(icon_path)
 
         # states
         self.progress_queue = queue.Queue()
