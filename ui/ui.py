@@ -94,6 +94,7 @@ class TranscriberApp(ctk.CTk):
         self.device_var = tk.StringVar(value=device_opts[0])
         self.device_opts = device_opts
 
+        # input & output file variables
         self.input_file_var = tk.StringVar()
         self.output_file_var = tk.StringVar()
 
@@ -218,7 +219,6 @@ class TranscriberApp(ctk.CTk):
             tooltip="Choose model for speed recognition",
             variable=self.model_var,
             values=[
-                # maybe delete this option?
                 "openai/whisper-large-v3-turbo",
                 "openai/whisper-large-v2",
                 "openai/whisper-large",
@@ -257,7 +257,7 @@ class TranscriberApp(ctk.CTk):
             text="Chunk length (s):",
             tooltip="Maximum length of processing audio fragment",
             variable=self.chunk_var,
-            values=["30", "25", "20", "15", "10", "5"],
+            values=["30", "24", "20", "14", "10", "6"],
         )
 
         # third row

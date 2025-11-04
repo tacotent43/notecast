@@ -17,6 +17,7 @@ class DeviceConfiguration:
             - "openai/whisper-medium"
             - "openai/whisper-large"
             - "openai/whisper-large-v2"
+            - "openai/whisper-large-v3-turbo"
 
         batch_size (int): Chunks in one batch. Selected for VRAM.
 
@@ -24,8 +25,8 @@ class DeviceConfiguration:
 
         data_type (str): custom data type of model. Variants:
             - torch.float16 - for GPUs
-            - torch.float32 - for CPU / weak GPU
-            - torch.bfloat16 - for GPUs which has BF16 support
+            - torch.float32 - for CPU
+            - torch.bfloat16 - for GPUs which has BF16 support (usually RTX 40XX+)
     """
 
     device: str = "cuda"

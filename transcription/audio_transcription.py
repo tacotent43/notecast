@@ -15,7 +15,54 @@ from ui.ui_log_handler import UILogHandler
 
 # TODO: implement transcription with shift
 class AudioTranscription:
-    model_name = "openai/whisper-large-v2"
+    """
+    Class for automatical audio transcription using Whisper.
+    
+    Provides audio file loading, resampling, conversion to mono,
+    splitting into chunks and batches, running the model, and compiling the final text.
+
+    Attributes: 
+        model_name (str): Whisper model name in HuggingFace.
+        filepath (str): Input filepath.
+        waveform (torch.Tensor): Audiosignal in tensor form.
+        sampling_rate (int): Input file's sampling frequency.
+        chunks (list): Audio's chunks list.
+        batches (list): Batches combined from chunks.
+        chunk_size (int): Chunk size in samples.
+        custom_chunk_length (int): Custom chunk length (in seconds).
+        custom_batch_length (int): Custom batch length (in chunks).
+        device (str): Inference device ("cuda", "cpu", "mps").
+        processor (WhisperProcessor | None): Tokenizator/preprocessor.
+        model (WhisperForConditionalGeneration | None): Whisper model.
+        logger (logging.Logger): Logger.
+        torch_dtype (torch.dtype): Data type for calculations (fp16/fp32).
+        language (str): Transcription language (default "ru").
+        all_transcription (list): List of strings with transcription.
+
+    Args:
+        filepath (str): Input filepath.
+        device_configuration (DeviceConfiguration): Device configuration 
+            (GPU/CPU/MPS, model, chunk length, batch etc.).
+        logger (logging.Logger): Logger.
+        language (str, optional): Transcription language. Default "ru".
+        
+    Example: 
+        >>> from transcription.device_configuration import DeviceConfiguration
+        >>> import logging
+        >>> config = DeviceConfiguration(device="cuda", model_name="openai/whisper-large-v3-turbo") # recheck this, not true i think
+        >>> logger = logging.getLogger("transcription")
+        >>> transcriber = AudioTranscription("audio.wav", config, logger, language="en")
+        >>> text = transcriber.transcribe_audio()
+        >>> print(text)
+        "This is a test audio transcription."
+    
+    Methods:
+        transcribe_audio() -> str:
+            Starts full transcription pipeline: model loading, 
+            file loading and preprocessing, splitting into chunks/batches, 
+            inference and model unloading. Returns the final transcription.
+    """
+    model_name = "openai/whisper-large-v3-turbo"
 
     filepath: str
     waveform: torch.Tensor
@@ -93,12 +140,14 @@ class AudioTranscription:
     def _load_file(self) -> None:
         self.logger.info(f"Loading file {self.filepath}")
         try:
-            self.waveform, self.sampling_rate = torchaudio.load(
-                self.filepath, format=self.file_format, backend="ffmpeg"
-            )
+            # self.waveform, self.sampling_rate = torchaudio.load(
+            #     self.filepath, format=self.file_format, backend="ffmpeg"
+            # )
+            self.waveform, self.sampling_rate = torchaudio.load(self.filepath)
             self.logger.info(f"Successfully loaded file {self.filepath}.")
         except Exception as e:
             self.logger.error(f"Unable to load file {self.filepath}: {e}")
+            # raise RuntimeError(f"Failed to load file {self.filepath}: {e}")
 
     def _resample(self) -> None:
         self.waveform = torchaudio.functional.resample(
