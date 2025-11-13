@@ -370,11 +370,13 @@ class TranscriberApp(ctk.CTk):
         debug_api_model_var: str = self.api_model_var.get() if self.api_model_var.get() else "Not set"
         debug_base_url_var: str = self.base_url_var.get() if self.base_url_var.get() else "Not set"
         debug_transcription_lang_var = self.transcription_lang_var.get() if self.transcription_lang_var.get() else "Not set"
+        debug_custom_prompt_var: str = self.custom_prompt_textbox.get() if self.custom_prompt_textbox.get() else "Not set"
         
         self.ui_logger.info(f"===== LLM Setting =====")
         self.ui_logger.info(f"API key: {debug_api_key_var}")
         self.ui_logger.info(f"Model name setting: {debug_api_model_var}")
         self.ui_logger.info(f"Base URL setting: {debug_base_url_var}")
+        # self.ui_logger.info(f"Custom prompt: {debug_transcription_lang_var}") # <-- issue here
         self.ui_logger.info(f"=======================")
         
 
@@ -432,11 +434,18 @@ class TranscriberApp(ctk.CTk):
             if self.create_conspect.get():
                 # TODO: add custom prompt ability here
                 # TODO: add logging here
+                # TODO: add progressbar instead of tqdm
                 self.ui_logger.info(f"Starting creating conspect via {self.api_model_var.get()}...")
-                with open("utils/default_prompt.json", "r", encoding="utf-8") as f:
-                    default_prompt = json.load(f)["prompt"]
+                with open("utils/default_prompt.txt", "r", encoding="utf-8") as f:
+                    default_prompt = "\n".join(f.readlines())
                 
-                prompt = transcription + default_prompt # if custom prompt is empty do something 
+                # if self.custom_prompt_textbox.get(): # <-- issue here
+                #     prompt = transcription + "\n" + self.custom_prompt_textbox.get()
+                # else:
+                #     prompt = transcription + "\n" + default_prompt
+                
+                prompt = transcription + "\n" + default_prompt
+
                 request = LLMrequest(
                     api_key=self.api_key_var.get(),
                     model_name=self.api_model_var.get(),
