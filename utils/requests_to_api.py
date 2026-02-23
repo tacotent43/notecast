@@ -1,6 +1,6 @@
 import openai
 
-
+# maybe make it asynchronous?
 class LLMrequest:
     def __init__(self, api_key: str, model_name: str, base_url: str = None):
         if base_url:

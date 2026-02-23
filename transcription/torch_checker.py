@@ -1,10 +1,8 @@
 import logging
-from dataclasses import dataclass
-
 import torch
 
 
-def check_torch(logger: logging.Logger) -> None:
+def checkTorch(logger: logging.Logger) -> None:
     logger.info("=== Checking PyTorch ===")
     logger.info(f"Torch version: {torch.__version__}")
 

@@ -24,3 +24,16 @@ def setup_ui_logger(text_widget: tk.Text, level=logging.INFO):
     logger.addHandler(handler)
 
     return logger
+
+# def setup_ui_logger(
+#     text_widget: tk.Text,
+#     base_logger: logging.Logger,
+#     level=logging.INFO,
+# ):
+#     handler = UILogHandler(text_widget)
+#     handler.setLevel(level)
+#     handler.setFormatter(
+#         logging.Formatter("%(asctime)s - %(levelname)s - %(message)s")
+#     )
+
+#     base_logger.addHandler(handler)

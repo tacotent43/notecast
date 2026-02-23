@@ -11,15 +11,14 @@ import customtkinter as ctk
 import torch
 
 from transcription.audio_transcription import AudioTranscription
-from transcription.device_configuration import DeviceConfiguration
-from transcription.torch_checker import check_torch
+from transcription.configuration import Configuration
+from transcription.torch_checker import checkTorch
 from ui.tooltip import ToolTip
 from ui.ui_log_handler import setup_ui_logger
 from utils.requests_to_api import LLMrequest
 
 WINDOW_WIDTH = 1000
 WINDOW_HEIGHT = 725
-
 
 class TranscriberApp(ctk.CTk):
     def __init__(self):
@@ -54,6 +53,7 @@ class TranscriberApp(ctk.CTk):
         # checkboxes
         self.create_conspect = tk.BooleanVar(value=False)
         self.remove_transcription = tk.BooleanVar(value=False)
+        self.latex_compiler = tk.StringVar(value="")
 
         # settings device options
         device_opts = []
@@ -187,7 +187,7 @@ class TranscriberApp(ctk.CTk):
             row=0,
             col=0,
             text="Model:",
-            tooltip="Choose model for speed recognition",
+            tooltip="Choose model for speech recognition",
             variable=self.model_var,
             values=[
                 "openai/whisper-large-v3-turbo",
@@ -296,6 +296,20 @@ class TranscriberApp(ctk.CTk):
             variable=self.conspect_transcription_lang_var,
             values=None,
         )
+        add_setting(
+            parent=grid,
+            row=4,
+            col=0,
+            text="LaTeX compiler:",
+            tooltip="Choose LaTeX compiler",
+            variable=self.latex_compiler,
+            values=[
+                "latexmk",
+                "lualatex",
+                "xelatex",
+                "bibtex"
+            ]
+        )
 
         ### Custom Prompt setting
         customPromptFrame = ctk.CTkFrame(grid)
@@ -350,13 +364,13 @@ class TranscriberApp(ctk.CTk):
             input_name = os.path.basename(self.input_file_var.get())
             name, _ = os.path.splitext(input_name)
             # TODO: redo output_name logic maybe?
-            output_name = f"{"".join(name.split(".").pop())}.txt"
+            output_name = f"{"".join(name.split(".")[:-1:])}.txt"
             path = os.path.join(directory, output_name)
 
             self.output_file_var.set(path)
 
     def _check_torch(self):
-        check_torch(self.ui_logger)
+        checkTorch(self.ui_logger)
         
         self.ui_logger.info(f"==== Transcription ====")
         self.ui_logger.info(f"Transcription model: {self.model_var.get()}")
@@ -405,21 +419,21 @@ class TranscriberApp(ctk.CTk):
 
     def _transcribe_worker(self, infile: str):
         try:
-            config = DeviceConfiguration(
+            config = Configuration(
                 device=self.device_var.get(),
-                model_name=self.model_var.get(),
-                batch_size=int(self.batch_var.get()),
-                chunk_length_s=int(self.chunk_var.get()),
+                modelName=self.model_var.get(),
+                batchSize=int(self.batch_var.get()),
+                chunkSize=int(self.chunk_var.get()),
                 data_type=self.dtype_var.get(),
             )
             Audio = AudioTranscription(
                 filepath=infile,
-                device_configuration=config,
-                logger=self.ui_logger,
+                config=config,
                 language=self.transcription_lang_var.get(),
             )
-            transcription = Audio.transcribe_audio()
+            transcription = Audio.transcribeAudio()
             
+            # remove from here
             outfile = self.output_file_var.get().strip()
             if not outfile:
                 outfile = infile
@@ -431,32 +445,32 @@ class TranscriberApp(ctk.CTk):
                     f.write(transcription)
                 self.ui_logger.info(f"Transcription saved to {outfile}.")
             
-            if self.create_conspect.get():
-                # TODO: add custom prompt ability here
-                # TODO: add logging here
-                # TODO: add progressbar instead of tqdm
-                self.ui_logger.info(f"Starting creating conspect via {self.api_model_var.get()}...")
-                with open("utils/default_prompt.txt", "r", encoding="utf-8") as f:
-                    default_prompt = "\n".join(f.readlines())
+            # if self.create_conspect.get():
+            #     # TODO: add custom prompt ability here
+            #     # TODO: add logging here
+            #     # TODO: add progressbar instead of tqdm
+            #     self.ui_logger.info(f"Starting creating conspect via {self.api_model_var.get()}...")
+            #     with open("utils/prompts/default_prompt.txt", "r", encoding="utf-8") as f:
+            #         default_prompt = "\n".join(f.readlines())
                 
-                # if self.custom_prompt_textbox.get(): # <-- issue here
-                #     prompt = transcription + "\n" + self.custom_prompt_textbox.get()
-                # else:
-                #     prompt = transcription + "\n" + default_prompt
+            #     # if self.custom_prompt_textbox.get(): # <-- issue here
+            #     #     prompt = transcription + "\n" + self.custom_prompt_textbox.get()
+            #     # else:
+            #     #     prompt = transcription + "\n" + default_prompt
                 
-                prompt = transcription + "\n" + default_prompt
+            #     prompt = transcription + "\n" + default_prompt
 
-                request = LLMrequest(
-                    api_key=self.api_key_var.get(),
-                    model_name=self.api_model_var.get(),
-                    base_url=self.base_url_var.get(),
-                )
-                response = request.get_response(prompt=prompt)
-                outfile += ".md"
-                with open(outfile, "w", encoding="utf-8") as f:
-                    f.write(response)
+            #     request = LLMrequest(
+            #         api_key=self.api_key_var.get(),
+            #         model_name=self.api_model_var.get(),
+            #         base_url=self.base_url_var.get(),
+            #     )
+            #     response = request.get_response(prompt=prompt)
+            #     outfile += ".md"
+            #     with open(outfile, "w", encoding="utf-8") as f:
+            #         f.write(response)
                 
-                self.ui_logger.info(f"Conspect saved to {outfile}.")
+            #     self.ui_logger.info(f"Conspect saved to {outfile}.")
 
         except Exception as e:
             self.ui_logger.error(f"Error: {e}")

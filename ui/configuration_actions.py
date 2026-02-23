@@ -1,4 +1,4 @@
-from transcription.device_configuration import DeviceConfiguration
+from transcription.configuration import Configuration
 
 
 # TODO: implement saving & removing configuration

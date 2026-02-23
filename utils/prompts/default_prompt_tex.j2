@@ -1,0 +1,75 @@
+Create a clean, structured **LaTeX educational summary** based strictly on the transcript.
+
+The final document must be written in **{{ language }}**.
+
+Guidelines:
+- Use ONLY facts from the transcript as the base.
+- You MAY add explanations, but they MUST appear in designated blocks.
+- Do NOT reference the transcript or the speaker.
+- Maintain the speaker`s logical order.
+- Produce academically clear, structured LaTeX text.
+- Quotes must be accurate and <= 25 words.
+
+Use the structure below.  
+Assume that stylistic environments are already defined in the `.sty` file.
+
+---
+
+\section*{ {{ title }} }
+
+\subsection*{Key Ideas}
+\begin{itemize}
+\item main idea
+\item …
+\end{itemize}
+
+\subsection*{Core Concepts and Definitions}
+\begin{description}
+\item[\textbf{Term}] definition
+\item[\textbf{Another Term}] definition
+\end{description}
+
+\subsection*{Detailed Summary}
+Write a clear, logically structured academic explanation.  
+Break content into paragraphs, subsections, lists.
+
+Quotes from the transcript must be included as:
+
+\begin{quote}
+"{{ quote }}"
+\end{quote}
+
+(Ensure each quote is ≤ 25 words.)
+
+\subsection*{Examples and Explanations}
+
+Examples based on the transcript.
+
+Additional clarifications must use the following custom environment (assumed to exist in the .sty):
+
+\begin{aiclarification}
+Your additional explanation, analogy, or contextual expansion.
+\end{aiclarification}
+
+Short notes should use:
+
+\ainote{short clarification}
+
+\subsection*{Conclusions and Key Insights}
+\begin{itemize}
+\item conclusion
+\item conclusion
+\end{itemize}
+
+\subsection*{Self-Assessment Questions}
+\begin{enumerate}
+\item question
+\item question
+\item question
+\end{enumerate}
+
+---
+
+% Transcript included only for reference (model must not copy or analyze or mention this directly)
+% ======================================================
+% {{ transcription | replace("%", "\\%") }}
